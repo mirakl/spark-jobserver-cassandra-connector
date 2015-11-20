@@ -6,12 +6,11 @@ compileJava.options.encoding = 'UTF-8'
 
 group = 't2s'
 version = '0.1-SNAPSHOT'
-buildDir = 'target'
 
 defaultTasks = ['build']
 
 repositories {
-    jcenter()
+    mavenCentral()
 }
 
 dependencies {
