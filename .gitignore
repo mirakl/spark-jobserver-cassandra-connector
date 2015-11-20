@@ -4,6 +4,9 @@
 hs_err_pid*
 
 # gradle
-.gradle
+.gradle*
 target
 reports
+
+# idea
+*.iml
