@@ -18,7 +18,6 @@ import scala.Option;
 import scala.collection.Seq;
 import scala.collection.immutable.Map;
 
-import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collection;
@@ -41,7 +40,7 @@ public class JobCassandraDaoTest {
     private static String contactPoint;
 
     @ClassRule
-    public static TemporaryFolder temporaryFolder = new TemporaryFolder(new File("./build/"));
+    public static TemporaryFolder temporaryFolder = new TemporaryFolder();
     private static SessionProvider sessionProvider;
 
     @BeforeClass
