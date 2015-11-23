@@ -1,6 +1,5 @@
 package spark.jobserver.io;
 
-import com.datastax.driver.core.ConsistencyLevel;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.TableMetadata;
 import com.datastax.driver.core.querybuilder.QueryBuilder;
@@ -41,7 +40,8 @@ public class JobCassandraDaoTest {
 
     @ClassRule
     public static TemporaryFolder temporaryFolder = new TemporaryFolder();
-    private static SessionProvider sessionProvider;
+    @ClassRule
+    public static CassandraCqlRule cassandraCqlRule = new CassandraCqlRule("jobserver.cql", "jobserver");
 
     @BeforeClass
     public static void before() throws Exception {
@@ -54,12 +54,11 @@ public class JobCassandraDaoTest {
                 .withValue("spark.jobserver.cassandradao.jarCache", ConfigValueFactory.fromAnyRef(temporaryFolder.newFolder().toString()));
 
         jobDAO = new JobCassandraDao(config);
-        sessionProvider = new SessionProvider(datacenter, keyspace, contactPoint, ConsistencyLevel.ONE.name());
     }
 
     @Before
     public void cleanData() {
-        Session session = sessionProvider.getInstance();
+        Session session = cassandraCqlRule.getSession();
         temporaryFolder.delete();
 
         Collection<TableMetadata> tables = session.getCluster().getMetadata().getKeyspace(keyspace).getTables();
