@@ -1,0 +1,162 @@
+package spark.jobserver.io;
+
+import com.datastax.driver.core.ConsistencyLevel;
+import com.datastax.driver.core.Session;
+import com.datastax.driver.core.TableMetadata;
+import com.datastax.driver.core.querybuilder.QueryBuilder;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
+import com.typesafe.config.ConfigValueFactory;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+import scala.Option;
+import scala.collection.Seq;
+import scala.collection.immutable.Map;
+
+import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Collection;
+
+import static com.typesafe.config.ConfigValueFactory.fromAnyRef;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.nio.file.Files.exists;
+import static java.nio.file.Files.readAllBytes;
+import static org.hamcrest.Matchers.isEmptyString;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.core.Is.is;
+import static org.junit.Assert.assertThat;
+
+public class JobCassandraDaoTest {
+    private static final byte[] JAR_CONTENT = "Jar content".getBytes(UTF_8);
+
+    private static JobDAO jobDAO;
+    private static String datacenter;
+    private static String keyspace;
+    private static String contactPoint;
+
+    @ClassRule
+    public static TemporaryFolder temporaryFolder = new TemporaryFolder(new File("./build/"));
+    private static SessionProvider sessionProvider;
+
+    @BeforeClass
+    public static void before() throws Exception {
+        datacenter = "datacenter1";
+        keyspace = "jobserver";
+        contactPoint = "127.0.0.1";
+        Config config = ConfigFactory.empty().withValue("spark.jobserver.cassandradao.datacenter", ConfigValueFactory.fromAnyRef(datacenter))
+                .withValue("spark.jobserver.cassandradao.keyspace", ConfigValueFactory.fromAnyRef(keyspace))
+                .withValue("spark.jobserver.cassandradao.contactsPoints", ConfigValueFactory.fromAnyRef(contactPoint))
+                .withValue("spark.jobserver.cassandradao.jarCache", ConfigValueFactory.fromAnyRef(temporaryFolder.newFolder().toString()));
+
+        jobDAO = new JobCassandraDao(config);
+        sessionProvider = new SessionProvider(datacenter, keyspace, contactPoint, ConsistencyLevel.ONE.name());
+    }
+
+    @Before
+    public void cleanData() {
+        Session session = sessionProvider.getInstance();
+        temporaryFolder.delete();
+
+        Collection<TableMetadata> tables = session.getCluster().getMetadata().getKeyspace(keyspace).getTables();
+        for (TableMetadata table : tables) {
+            session.execute(QueryBuilder.truncate(table));
+        }
+    }
+
+    @Test
+    public void saveAndRetriveJar() throws Exception {
+        String appName = "appName";
+        DateTime uploadTime = DateTime.now();
+
+        assertThat(jobDAO.retrieveJarFile(appName, uploadTime), isEmptyString());
+
+        jobDAO.saveJar(appName, uploadTime, JAR_CONTENT);
+
+        String jarPath = jobDAO.retrieveJarFile(appName, uploadTime);
+        assertThat(jarPath, not((isEmptyString())));
+
+        Path jarFile = Paths.get(jarPath);
+        assertThat(exists(jarFile), is(true));
+        assertThat(readAllBytes(jarFile), is(JAR_CONTENT));
+    }
+
+    @Test
+    public void saveAndReadJobInfos() throws Exception {
+        // Read unknown jobId
+        assertThat(jobDAO.getJobInfo("unknow_job_id").isEmpty(), is(true));
+        assertThat(jobDAO.getJobInfos(10).isEmpty(), is(true));
+
+        JobInfo jobInfo = createJobInfo("job1");
+        jobDAO.saveJobInfo(jobInfo);
+
+        Option<JobInfo> jobInfoPersisted = jobDAO.getJobInfo("job1");
+        assertThat(jobInfoPersisted.isDefined(), is(true));
+        assertThat(jobInfoPersisted.get(), is(jobInfo));
+
+        Seq<JobInfo> jobInfos = jobDAO.getJobInfos(10);
+        assertThat(jobInfos.size(), is(1));
+        assertThat(jobInfos.head(), is(jobInfo));
+
+
+        JobInfo jobInfo2 = createJobInfo("job2");
+        jobDAO.saveJobInfo(jobInfo2);
+        Seq<JobInfo> jobInfos2 = jobDAO.getJobInfos(10);
+        assertThat(jobInfos2.size(), is(2));
+        assertThat(jobInfos2.apply(0).jobId(), is("job1"));
+        assertThat(jobInfos2.apply(1).jobId(), is("job2"));
+
+        Seq<JobInfo> jobInfosLimited = jobDAO.getJobInfos(1);
+        assertThat(jobInfosLimited.size(), is(1));
+    }
+
+    @Test
+    public void saveAndReadJobConfigs() throws Exception {
+        assertThat(jobDAO.getJobConfigs().isEmpty(), is(true));
+
+        Config config1 = createConfig();
+
+        jobDAO.saveJobConfig("job1", config1);
+
+        Map<String, Config> jobConfigs = jobDAO.getJobConfigs();
+        assertThat(jobConfigs.size(), is(1));
+        assertThat(jobConfigs.get("job1").get(), is(config1));
+    }
+
+    @Test
+    public void getApps() throws Exception {
+        assertThat(jobDAO.getApps().isEmpty(), is(true));
+
+        String appName = "appName";
+        DateTime uploadTime = DateTime.now();
+        jobDAO.saveJar(appName, uploadTime, JAR_CONTENT);
+
+        Map<String, DateTime> apps = jobDAO.getApps();
+        assertThat(apps.size(), is(1));
+        assertThat(apps.contains(appName), is(true));
+        assertThat(apps.get(appName), is(Option.apply(uploadTime)));
+    }
+
+    private Config createConfig() {
+        return ConfigFactory.empty()
+                .withValue("field1", fromAnyRef("value1"))
+                .withValue("field2", fromAnyRef("value2"));
+    }
+
+    private JobInfo createJobInfo(String id) {
+        return new JobInfo(id,
+                "contextName",
+                new JarInfo("jarName", DateTime.now().withZone(DateTimeZone.UTC)),
+                "classpath",
+                DateTime.now().withZone(DateTimeZone.UTC),
+                Option.<DateTime>empty(),
+                Option.<Throwable>empty());
+    }
+
+
+}
