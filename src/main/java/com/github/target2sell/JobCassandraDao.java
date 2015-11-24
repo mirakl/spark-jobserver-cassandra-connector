@@ -62,7 +62,7 @@ public class JobCassandraDao implements JobDAO {
                 .withValue("spark.jobserver.cassandradao.keyspace", fromAnyRef("jobserver"))
                 .withValue("spark.jobserver.cassandradao.contactsPoints", fromAnyRef("127.0.0.1"))
                 .withValue("spark.jobserver.cassandradao.consistencyLevel", fromAnyRef("ONE"))
-                .withValue("spark.jobserver.cassandradao.jarCache", fromAnyRef("datacenter1"))
+                .withValue("spark.jobserver.cassandradao.datacenter", fromAnyRef("datacenter1"))
                 .withValue("spark.jobserver.cassandradao.jarCache", fromAnyRef("/tmp/jobserver/cassandradao/"));
 
         Config configMerged = config.withFallback(defaultConfig);
