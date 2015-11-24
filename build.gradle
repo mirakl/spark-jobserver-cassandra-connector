@@ -13,7 +13,6 @@ targetCompatibility = 1.8
 compileJava.options.encoding = 'UTF-8'
 
 group = 'com.github.target2sell'
-version = '0.1-SNAPSHOT'
 description = 'Java Cassandra connector for Spark JobServer'
 defaultTasks = ['build']
 
