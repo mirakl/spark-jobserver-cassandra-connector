@@ -106,6 +106,13 @@ uploadArchives {
                         organization = 'Target2sell'
                         organizationUrl = 'http://www.target2sell.com/'
                     }
+                    developer {
+                        id 'jpcaruana_t2s'
+                        name = 'Jean-Philippe Caruana`'
+                        email = 'jp@target2sell.com'
+                        organization = 'Target2sell'
+                        organizationUrl = 'http://www.target2sell.com/'
+                    }
                 }
             }
         }
