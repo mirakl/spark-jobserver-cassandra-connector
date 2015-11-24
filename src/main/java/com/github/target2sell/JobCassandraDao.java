@@ -1,4 +1,4 @@
-package spark.jobserver.io;
+package com.github.target2sell;
 
 import com.datastax.driver.core.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -17,6 +17,8 @@ import scala.Tuple2;
 import scala.collection.Seq;
 import scala.collection.immutable.Map;
 import scala.collection.mutable.ArraySeq;
+import spark.jobserver.io.JobDAO;
+import spark.jobserver.io.JobInfo;
 
 import java.io.IOException;
 import java.io.OutputStream;

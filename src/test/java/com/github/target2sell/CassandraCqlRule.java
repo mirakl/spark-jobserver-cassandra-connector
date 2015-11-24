@@ -1,4 +1,4 @@
-package spark.jobserver.io;
+package com.github.target2sell;
 
 import com.datastax.driver.core.Cluster;
 import com.datastax.driver.core.ProtocolVersion;

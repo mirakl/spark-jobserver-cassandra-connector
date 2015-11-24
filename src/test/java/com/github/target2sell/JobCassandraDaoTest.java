@@ -1,4 +1,4 @@
-package spark.jobserver.io;
+package com.github.target2sell;
 
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.TableMetadata;
@@ -16,6 +16,9 @@ import org.junit.rules.TemporaryFolder;
 import scala.Option;
 import scala.collection.Seq;
 import scala.collection.immutable.Map;
+import spark.jobserver.io.JarInfo;
+import spark.jobserver.io.JobDAO;
+import spark.jobserver.io.JobInfo;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
