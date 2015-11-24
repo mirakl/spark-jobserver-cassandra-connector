@@ -11,12 +11,11 @@ import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigRenderOptions;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
+import scala.Function0;
 import scala.Option;
 import scala.Predef;
 import scala.Tuple2;
-import scala.collection.Seq;
 import scala.collection.immutable.Map;
-import scala.collection.mutable.ArraySeq;
 import spark.jobserver.io.JobDAO;
 import spark.jobserver.io.JobInfo;
 
@@ -26,16 +25,13 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.List;
+import java.util.Optional;
 import java.util.stream.StreamSupport;
 
 import static com.typesafe.config.ConfigValueFactory.fromAnyRef;
 import static java.nio.file.StandardOpenOption.CREATE_NEW;
-import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 import static org.slf4j.LoggerFactory.getLogger;
-import static scala.Option.empty;
-import static scala.collection.JavaConversions.asScalaBuffer;
 import static scala.collection.JavaConversions.asScalaMap;
 
 
@@ -49,7 +45,6 @@ public class JobCassandraDao implements JobDAO {
     private PreparedStatement saveJobConfigStatement;
     private PreparedStatement findJobConfigStatement;
     private PreparedStatement saveJobInfoStatement;
-    private PreparedStatement findJobInfoStatement;
     private PreparedStatement findJobInfosStatement;
     private PreparedStatement saveJarStatement;
     private PreparedStatement findAppsStatement;
@@ -84,7 +79,6 @@ public class JobCassandraDao implements JobDAO {
 
     private void init() {
         saveJobInfoStatement = session.prepare("INSERT INTO job_info(job_id, content) VALUES (:job_id, :content)");
-        findJobInfoStatement = session.prepare("SELECT job_id, content FROM job_info WHERE job_id = :job_id");
         findJobInfosStatement = session.prepare("SELECT job_id, content FROM job_info");
 
         saveJobConfigStatement = session.prepare("INSERT INTO job_config(job_id, content) VALUES (:job_id, :content)");
@@ -161,28 +155,15 @@ public class JobCassandraDao implements JobDAO {
     }
 
     @Override
-    public Option<JobInfo> getJobInfo(String jobId) {
-        final ResultSet resultSet = session.execute(findJobInfoStatement.bind(jobId));
-        if (resultSet.isExhausted()) {
-            return empty();
-        }
-        return Option.apply(parseStringToJobInfo(resultSet.one()));
-    }
-
-    @Override
-    public Seq<JobInfo> getJobInfos(int limit) {
+    public Map<String, JobInfo> getJobInfos() {
         final ResultSet resultSet = session.execute(findJobInfosStatement.bind());
-        if (resultSet.isExhausted()) {
-            return new ArraySeq<>(0);
-        }
 
-        List<JobInfo> jobInfoList = StreamSupport.stream(resultSet.spliterator(), false)
+        java.util.Map<String, JobInfo> jobInfoMap = StreamSupport.stream(resultSet.spliterator(), false)
                 .map(this::parseStringToJobInfo)
                 .filter(jobInfo -> jobInfo != null)
-                .limit(limit)
-                .collect(toList());
+                .collect(toMap(JobInfo::jobId, jobInfo -> jobInfo));
 
-        return asScalaBuffer(jobInfoList).toList();
+        return convertMapToImmutableMap(jobInfoMap);
     }
 
     private JobInfo parseStringToJobInfo(Row row) {
@@ -223,5 +204,10 @@ public class JobCassandraDao implements JobDAO {
     @Override
     public Option<DateTime> getLastUploadTime(String appName) {
         return this.getApps().get(appName);
+    }
+
+    @Override
+    public <T> T getOrElse(Function0<T> getter, T _default) {
+        return Optional.of(getter.apply()).orElse(_default);
     }
 }

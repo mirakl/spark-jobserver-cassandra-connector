@@ -14,7 +14,6 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import scala.Option;
-import scala.collection.Seq;
 import scala.collection.immutable.Map;
 import spark.jobserver.io.JarInfo;
 import spark.jobserver.io.JobDAO;
@@ -90,30 +89,22 @@ public class JobCassandraDaoTest {
     @Test
     public void saveAndReadJobInfos() throws Exception {
         // Read unknown jobId
-        assertThat(jobDAO.getJobInfo("unknow_job_id").isEmpty(), is(true));
-        assertThat(jobDAO.getJobInfos(10).isEmpty(), is(true));
+        assertThat(jobDAO.getJobInfos().isEmpty(), is(true));
 
         JobInfo jobInfo = createJobInfo("job1");
         jobDAO.saveJobInfo(jobInfo);
 
-        Option<JobInfo> jobInfoPersisted = jobDAO.getJobInfo("job1");
-        assertThat(jobInfoPersisted.isDefined(), is(true));
-        assertThat(jobInfoPersisted.get(), is(jobInfo));
-
-        Seq<JobInfo> jobInfos = jobDAO.getJobInfos(10);
-        assertThat(jobInfos.size(), is(1));
-        assertThat(jobInfos.head(), is(jobInfo));
+        Map<String, JobInfo> jobInfoPersisted = jobDAO.getJobInfos();
+        assertThat(jobInfoPersisted.contains("job1"), is(true));
+        assertThat(jobInfoPersisted.get("job1").get(), is(jobInfo));
 
 
         JobInfo jobInfo2 = createJobInfo("job2");
         jobDAO.saveJobInfo(jobInfo2);
-        Seq<JobInfo> jobInfos2 = jobDAO.getJobInfos(10);
+        Map<String, JobInfo> jobInfos2 = jobDAO.getJobInfos();
         assertThat(jobInfos2.size(), is(2));
-        assertThat(jobInfos2.apply(0).jobId(), is("job1"));
-        assertThat(jobInfos2.apply(1).jobId(), is("job2"));
-
-        Seq<JobInfo> jobInfosLimited = jobDAO.getJobInfos(1);
-        assertThat(jobInfosLimited.size(), is(1));
+        assertThat(jobInfos2.contains("job1"), is(true));
+        assertThat(jobInfos2.contains("job2"), is(true));
     }
 
     @Test

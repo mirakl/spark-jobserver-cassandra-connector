@@ -27,7 +27,7 @@ def JACKSON_VERSION = '2.3.5'
 
 dependencies {
     compile 'org.slf4j:slf4j-api:1.7.12'
-    compile 'spark.jobserver:job-server_2.10:0.6.0'
+    compile 'spark.jobserver:job-server_2.10:0.5.1'
     compile 'joda-time:joda-time:2.3'
     compile 'com.datastax.cassandra:cassandra-driver-core:2.1.8'
     compile 'com.fasterxml.jackson.core:jackson-core:' + JACKSON_VERSION
