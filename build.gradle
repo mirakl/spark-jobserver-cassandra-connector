@@ -80,38 +80,36 @@ uploadArchives {
             }
 
             pom.project {
-                name = group + ':' + name
-                packaging = 'jar'
-                description = description
-                url = 'https://github.com/target2sell/spark-jobserver-cassandra-connector'
+                description 'Java Cassandra connector for Spark JobServer'
+                url 'https://github.com/target2sell/spark-jobserver-cassandra-connector'
 
                 scm {
-                    connection = 'scm:git:https://github.com/target2sell/spark-jobserver-cassandra-connector.git'
-                    developerConnection = 'scm:git:https://github.com/target2sell/spark-jobserver-cassandra-connector.git'
-                    url = 'https://github.com/target2sell/spark-jobserver-cassandra-connector'
+                    connection 'scm: git: https://github.com/target2sell/spark-jobserver-cassandra-connector.git'
+                    developerConnection 'scm:git:https://github.com/target2sell/spark-jobserver-cassandra-connector.git'
+                    url 'https://github.com/target2sell/spark-jobserver-cassandra-connector'
                 }
 
                 licenses {
                     license {
-                        name = 'The Apache License, Version 2.0'
-                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                        name 'The Apache License, Version 2.0'
+                        url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
                     }
                 }
 
                 developers {
                     developer {
-                        id 't2s'
-                        name = 'Cyrille Nofficial'
-                        email = 'cyrille.nofficial@target2sell.com'
-                        organization = 'Target2sell'
-                        organizationUrl = 'http://www.target2sell.com/'
+                        id 'cyrilix'
+                        name 'Cyrille Nofficial'
+                        email 'cyrille.nofficial@target2sell.com'
+                        organization 'Target2sell'
+                        organizationUrl 'http://www.target2sell.com/'
                     }
                     developer {
                         id 'jpcaruana_t2s'
-                        name = 'Jean-Philippe Caruana`'
-                        email = 'jp@target2sell.com'
-                        organization = 'Target2sell'
-                        organizationUrl = 'http://www.target2sell.com/'
+                        name 'Jean-Philippe Caruana`'
+                        email 'jp@target2sell.com'
+                        organization 'Target2sell'
+                        organizationUrl 'http://www.target2sell.com/'
                     }
                 }
             }
