@@ -45,6 +45,9 @@ public class JobCassandraDaoTest {
     @ClassRule
     public static CassandraCqlRule cassandraCqlRule = new CassandraCqlRule("jobserver.cql", "jobserver");
 
+    @ClassRule
+    public static HdfsRule hdfsRule = new HdfsRule();
+
     @BeforeClass
     public static void before() throws Exception {
         datacenter = "datacenter1";
@@ -53,15 +56,17 @@ public class JobCassandraDaoTest {
         Config config = ConfigFactory.empty().withValue("spark.jobserver.cassandradao.datacenter", ConfigValueFactory.fromAnyRef(datacenter))
                 .withValue("spark.jobserver.cassandradao.keyspace", ConfigValueFactory.fromAnyRef(keyspace))
                 .withValue("spark.jobserver.cassandradao.contactsPoints", ConfigValueFactory.fromAnyRef(contactPoint))
-                .withValue("spark.jobserver.cassandradao.jarCache", ConfigValueFactory.fromAnyRef(temporaryFolder.newFolder().toString()));
+                .withValue("spark.jobserver.cassandradao.jarCache", ConfigValueFactory.fromAnyRef(temporaryFolder.newFolder().toString()))
+                .withValue("spark.jobserver.cassandradao.fsUri", ConfigValueFactory.fromAnyRef(hdfsRule.getHdfsURI() + "jobserver/"));
 
         jobDAO = new JobCassandraDao(config);
     }
 
     @Before
-    public void cleanData() {
+    public void cleanData() throws Exception {
         Session session = cassandraCqlRule.getSession();
         temporaryFolder.delete();
+        hdfsRule.clear();
 
         Collection<TableMetadata> tables = session.getCluster().getMetadata().getKeyspace(keyspace).getTables();
         for (TableMetadata table : tables) {

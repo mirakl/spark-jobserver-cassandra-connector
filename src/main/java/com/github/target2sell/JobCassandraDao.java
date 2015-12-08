@@ -1,6 +1,9 @@
 package com.github.target2sell;
 
-import com.datastax.driver.core.*;
+import com.datastax.driver.core.PreparedStatement;
+import com.datastax.driver.core.ResultSet;
+import com.datastax.driver.core.Row;
+import com.datastax.driver.core.Session;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,6 +12,10 @@ import com.fasterxml.jackson.module.scala.DefaultScalaModule;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigRenderOptions;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import scala.Function0;
@@ -20,16 +27,12 @@ import spark.jobserver.io.JobDAO;
 import spark.jobserver.io.JobInfo;
 
 import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.ByteBuffer;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Optional;
 import java.util.stream.StreamSupport;
 
 import static com.typesafe.config.ConfigValueFactory.fromAnyRef;
-import static java.nio.file.StandardOpenOption.CREATE_NEW;
 import static java.util.stream.Collectors.toMap;
 import static org.slf4j.LoggerFactory.getLogger;
 import static scala.collection.JavaConversions.asScalaMap;
@@ -40,15 +43,14 @@ public class JobCassandraDao implements JobDAO {
 
     private final ObjectMapper mapper;
     private final Path jarCacheDirectory;
+    private final String defaultFS;
+    private final String cfsImpl = "com.datastax.bdp.hadoop.cfs.CassandraFileSystem";
     private Session session;
 
     private PreparedStatement saveJobConfigStatement;
     private PreparedStatement findJobConfigStatement;
     private PreparedStatement saveJobInfoStatement;
     private PreparedStatement findJobInfosStatement;
-    private PreparedStatement saveJarStatement;
-    private PreparedStatement findAppsStatement;
-    private PreparedStatement findJar;
 
 
     public JobCassandraDao(Config config) {
@@ -58,13 +60,15 @@ public class JobCassandraDao implements JobDAO {
                 .withValue("spark.jobserver.cassandradao.contactsPoints", fromAnyRef("127.0.0.1"))
                 .withValue("spark.jobserver.cassandradao.consistencyLevel", fromAnyRef("ONE"))
                 .withValue("spark.jobserver.cassandradao.datacenter", fromAnyRef("datacenter1"))
-                .withValue("spark.jobserver.cassandradao.jarCache", fromAnyRef("/tmp/jobserver/cassandradao/"));
+                .withValue("spark.jobserver.cassandradao.jarCache", fromAnyRef("/tmp/jobserver/cassandradao/"))
+                .withValue("spark.jobserver.cassandradao.fsUri", fromAnyRef("cfs://127.0.0.1/"));
 
         Config configMerged = config.withFallback(defaultConfig);
         String datacenter = configMerged.getString("spark.jobserver.cassandradao.datacenter");
         String keyspace = configMerged.getString("spark.jobserver.cassandradao.keyspace");
         String contactsPoints = configMerged.getString("spark.jobserver.cassandradao.contactsPoints");
         String consistencyLevel = configMerged.getString("spark.jobserver.cassandradao.consistencyLevel");
+        defaultFS = configMerged.getString("spark.jobserver.cassandradao.fsUri");
 
         SessionProvider sessionProvider = new SessionProvider(datacenter, keyspace, contactsPoints, consistencyLevel);
         session = sessionProvider.getInstance();
@@ -83,29 +87,58 @@ public class JobCassandraDao implements JobDAO {
 
         saveJobConfigStatement = session.prepare("INSERT INTO job_config(job_id, content) VALUES (:job_id, :content)");
         findJobConfigStatement = session.prepare("SELECT job_id, content FROM job_config");
-
-        saveJarStatement = session.prepare("INSERT INTO applications(app_name, upload_time, jar_content) VALUES (:app_name, :upload_time, :jar_content)");
-        findAppsStatement = session.prepare("SELECT app_name, upload_time FROM applications");
-        findJar = session.prepare("SELECT jar_content FROM applications WHERE app_name = :app_name AND upload_time = :upload_time");
     }
 
 
     @Override
     public void saveJar(String appName, DateTime uploadTime, byte[] jarBytes) {
-        BoundStatement statement = saveJarStatement.bind()
-                .setString("app_name", appName)
-                .setDate("upload_time", uploadTime.toDate())
-                .setBytes("jar_content", ByteBuffer.wrap(jarBytes));
+        try (FileSystem fs = FileSystem.get(getFSConfig())) {
+            org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path("/" + uploadTime.getMillis() + "/" + appName + ".jar");
+            FSDataOutputStream dataOutputStream = fs.create(path);
+            dataOutputStream.write(jarBytes);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
-        session.execute(statement);
+    private org.apache.hadoop.conf.Configuration getFSConfig() {
+        org.apache.hadoop.conf.Configuration config = new org.apache.hadoop.conf.Configuration();
+
+        config.set("fs.defaultFS", defaultFS);
+        config.set("fs.cfs.impl", cfsImpl);
+        return config;
     }
 
     @Override
     public Map<String, DateTime> getApps() {
-        java.util.Map<String, DateTime> apps = StreamSupport.stream(session.execute(findAppsStatement.bind()).spliterator(), false)
-                .collect(toMap(row -> row.getString("app_name"), row -> new DateTime(row.getDate("upload_time").getTime())));
+        java.util.Map<String, DateTime> result = new java.util.HashMap<>();
 
-        return convertMapToImmutableMap(apps);
+        try (FileSystem fs = FileSystem.get(getFSConfig())) {
+            final org.apache.hadoop.fs.Path jarDir = new org.apache.hadoop.fs.Path("/");
+            if (!fs.exists(jarDir)) {
+                return convertMapToImmutableMap(result);
+            }
+
+            RemoteIterator<LocatedFileStatus> iterator = fs.listFiles(jarDir, true);
+            while (iterator.hasNext()) {
+                LocatedFileStatus fileStatus = iterator.next();
+                org.apache.hadoop.fs.Path jarPath = fileStatus.getPath();
+
+                String jarName = jarPath.getName();
+                if (!jarName.endsWith(".jar")) {
+                    continue;
+                }
+
+                String appname = jarName.replaceAll("\\.jar$", "");
+                long dateTime = Long.parseLong(jarPath.getParent().getName());
+                result.put(appname, new DateTime(dateTime));
+            }
+        } catch (IOException e) {
+            logger.error("Unexpected error: {}", e.getMessage(), e);
+            throw new RuntimeException("Unexpected error: " + e.getMessage(), e);
+        }
+
+        return convertMapToImmutableMap(result);
     }
 
     @Override
@@ -123,23 +156,18 @@ public class JobCassandraDao implements JobDAO {
             logger.error("Unable to make jar cache directory in: {}", jar.getParent().toString());
             return false;
         }
-
-        BoundStatement boundStatement = findJar.bind()
-                .setString("app_name", appName)
-                .setDate("upload_time", uploadTime.toDate());
-
-        ResultSet resultSet = session.execute(boundStatement);
-        if (resultSet.isExhausted()) {
-            return false;
-        }
-        ByteBuffer jarContent = resultSet.one().getBytes("jar_content");
-
-        try (OutputStream jarOutputStream = Files.newOutputStream(jar, CREATE_NEW)) {
-            jarOutputStream.write(jarContent.array());
+        try (FileSystem fs = FileSystem.get(getFSConfig())) {
+            org.apache.hadoop.fs.Path srcJar = new org.apache.hadoop.fs.Path("/" + uploadTime.getMillis() + "/" + appName + ".jar");
+            org.apache.hadoop.fs.Path localJar = new org.apache.hadoop.fs.Path(jar.toAbsolutePath().toString());
+            if (!fs.exists(srcJar)) {
+                return false;
+            }
+            fs.copyToLocalFile(srcJar, localJar);
         } catch (IOException e) {
             logger.error("Unable to write jar content: {}", e.getMessage(), e);
             return false;
         }
+
         return true;
     }
 

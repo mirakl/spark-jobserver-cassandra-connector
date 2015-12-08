@@ -14,10 +14,3 @@ CREATE TABLE IF NOT EXISTS jobserver.job_config (
     PRIMARY KEY (job_id)
 ) ;
 
-CREATE TABLE IF NOT EXISTS jobserver.applications (
-    app_name text,
-    upload_time timestamp,
-    jar_content blob,
-
-    PRIMARY KEY ((app_name), upload_time)
-) ;
