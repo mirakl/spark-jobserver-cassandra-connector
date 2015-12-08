@@ -13,9 +13,8 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigRenderOptions;
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import scala.Function0;
@@ -104,7 +103,7 @@ public class JobCassandraDao implements JobDAO {
     private org.apache.hadoop.conf.Configuration getFSConfig() {
         org.apache.hadoop.conf.Configuration config = new org.apache.hadoop.conf.Configuration();
 
-        config.set("fs.defaultFS", defaultFS);
+        config.set("fs.default.name", defaultFS);
         config.set("fs.cfs.impl", cfsImpl);
         return config;
     }
@@ -119,19 +118,20 @@ public class JobCassandraDao implements JobDAO {
                 return convertMapToImmutableMap(result);
             }
 
-            RemoteIterator<LocatedFileStatus> iterator = fs.listFiles(jarDir, true);
-            while (iterator.hasNext()) {
-                LocatedFileStatus fileStatus = iterator.next();
-                org.apache.hadoop.fs.Path jarPath = fileStatus.getPath();
-
-                String jarName = jarPath.getName();
-                if (!jarName.endsWith(".jar")) {
+            for (FileStatus directoryTimestamp : fs.listStatus(jarDir)) {
+                if (!directoryTimestamp.isDir()) {
                     continue;
                 }
+                for (FileStatus jarPath : fs.listStatus(directoryTimestamp.getPath())) {
+                    String jarName = jarPath.getPath().getName();
+                    if (!jarName.endsWith(".jar")) {
+                        continue;
+                    }
 
-                String appname = jarName.replaceAll("\\.jar$", "");
-                long dateTime = Long.parseLong(jarPath.getParent().getName());
-                result.put(appname, new DateTime(dateTime));
+                    String appname = jarName.replaceAll("\\.jar$", "");
+                    long dateTime = Long.parseLong(jarPath.getPath().getParent().getName());
+                    result.put(appname, new DateTime(dateTime));
+                }
             }
         } catch (IOException e) {
             logger.error("Unexpected error: {}", e.getMessage(), e);

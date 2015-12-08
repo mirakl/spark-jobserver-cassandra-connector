@@ -1,8 +1,8 @@
 package com.github.target2sell;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.junit.rules.TemporaryFolder;
 
@@ -16,18 +16,21 @@ public class HdfsRule extends TemporaryFolder {
     @Override
     protected void before() throws Throwable {
         super.before();
-
+        getRoot().getAbsoluteFile().mkdirs();
         Configuration conf = new Configuration();
-        conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, getRoot().getAbsolutePath());
-        MiniDFSCluster.Builder builder = new MiniDFSCluster.Builder(conf);
-        hdfsCluster = builder.build();
+        conf.set("dfs.name.dir", getRoot().getAbsolutePath());
+        hdfsCluster = new MiniDFSCluster(conf, 1, true, null);
 
         hdfsURI = "hdfs://localhost:" + hdfsCluster.getNameNodePort() + "/";
+        FileSystem fileSystem = hdfsCluster.getFileSystem();
     }
 
     @Override
     protected void after() {
+        hdfsCluster.shutdownNameNode();
+        hdfsCluster.shutdownDataNodes();
         hdfsCluster.shutdown();
+
         super.after();
     }
 
@@ -36,7 +39,6 @@ public class HdfsRule extends TemporaryFolder {
     }
 
     public void clear() throws IOException {
-        DistributedFileSystem fileSystem = hdfsCluster.getFileSystem();
-        fileSystem.delete(new Path("/"), true);
+        hdfsCluster.getFileSystem().delete(new Path("/"), true);
     }
 }
