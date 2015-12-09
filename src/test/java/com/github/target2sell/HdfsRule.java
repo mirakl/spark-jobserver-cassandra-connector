@@ -1,7 +1,6 @@
 package com.github.target2sell;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.junit.rules.TemporaryFolder;
@@ -22,7 +21,6 @@ public class HdfsRule extends TemporaryFolder {
         hdfsCluster = new MiniDFSCluster(conf, 1, true, null);
 
         hdfsURI = "hdfs://localhost:" + hdfsCluster.getNameNodePort() + "/";
-        FileSystem fileSystem = hdfsCluster.getFileSystem();
     }
 
     @Override

@@ -50,9 +50,10 @@ public class JobCassandraDao implements JobDAO {
     private PreparedStatement findJobConfigStatement;
     private PreparedStatement saveJobInfoStatement;
     private PreparedStatement findJobInfosStatement;
+    private final FileSystem fs;
 
 
-    public JobCassandraDao(Config config) {
+    public JobCassandraDao(Config config) throws IOException {
         Config defaultConfig = ConfigFactory.empty()
                 .withValue("spark.jobserver.cassandradao.datacenter", fromAnyRef("dc1"))
                 .withValue("spark.jobserver.cassandradao.keyspace", fromAnyRef("jobserver"))
@@ -78,6 +79,7 @@ public class JobCassandraDao implements JobDAO {
         mapper = new ObjectMapper();
         mapper.registerModules(new DefaultScalaModule(), new JodaModule());
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        fs = FileSystem.get(getFSConfig());
     }
 
     private void init() {
@@ -91,12 +93,14 @@ public class JobCassandraDao implements JobDAO {
 
     @Override
     public void saveJar(String appName, DateTime uploadTime, byte[] jarBytes) {
-        try (FileSystem fs = FileSystem.get(getFSConfig())) {
+        try {
             org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path("/" + uploadTime.getMillis() + "/" + appName + ".jar");
-            FSDataOutputStream dataOutputStream = fs.create(path);
-            dataOutputStream.write(jarBytes);
+            try (FSDataOutputStream dataOutputStream = fs.create(path)) {
+                dataOutputStream.write(jarBytes);
+            }
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("Unexpected error: {}", e.getMessage(), e);
+            throw new RuntimeException("Unexpected error: " + e.getMessage(), e);
         }
     }
 
@@ -112,7 +116,7 @@ public class JobCassandraDao implements JobDAO {
     public Map<String, DateTime> getApps() {
         java.util.Map<String, DateTime> result = new java.util.HashMap<>();
 
-        try (FileSystem fs = FileSystem.get(getFSConfig())) {
+        try {
             final org.apache.hadoop.fs.Path jarDir = new org.apache.hadoop.fs.Path("/");
             if (!fs.exists(jarDir)) {
                 return convertMapToImmutableMap(result);
@@ -156,7 +160,7 @@ public class JobCassandraDao implements JobDAO {
             logger.error("Unable to make jar cache directory in: {}", jar.getParent().toString());
             return false;
         }
-        try (FileSystem fs = FileSystem.get(getFSConfig())) {
+        try {
             org.apache.hadoop.fs.Path srcJar = new org.apache.hadoop.fs.Path("/" + uploadTime.getMillis() + "/" + appName + ".jar");
             org.apache.hadoop.fs.Path localJar = new org.apache.hadoop.fs.Path(jar.toAbsolutePath().toString());
             if (!fs.exists(srcJar)) {
