@@ -38,6 +38,7 @@ import static scala.collection.JavaConversions.asScalaMap;
 
 
 public class JobCassandraDao implements JobDAO {
+    public static final String ROOT_DIRECTORY = "/jobserver/";
     private final Logger logger = getLogger(JobCassandraDao.class);
 
     private final ObjectMapper mapper;
@@ -94,7 +95,7 @@ public class JobCassandraDao implements JobDAO {
     @Override
     public void saveJar(String appName, DateTime uploadTime, byte[] jarBytes) {
         try {
-            org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path("/" + uploadTime.getMillis() + "/" + appName + ".jar");
+            org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(ROOT_DIRECTORY + uploadTime.getMillis() + "/" + appName + ".jar");
             try (FSDataOutputStream dataOutputStream = fs.create(path)) {
                 dataOutputStream.write(jarBytes);
             }
@@ -117,7 +118,7 @@ public class JobCassandraDao implements JobDAO {
         java.util.Map<String, DateTime> result = new java.util.HashMap<>();
 
         try {
-            final org.apache.hadoop.fs.Path jarDir = new org.apache.hadoop.fs.Path("/");
+            final org.apache.hadoop.fs.Path jarDir = new org.apache.hadoop.fs.Path(ROOT_DIRECTORY);
             if (!fs.exists(jarDir)) {
                 return convertMapToImmutableMap(result);
             }
@@ -161,7 +162,7 @@ public class JobCassandraDao implements JobDAO {
             return false;
         }
         try {
-            org.apache.hadoop.fs.Path srcJar = new org.apache.hadoop.fs.Path("/" + uploadTime.getMillis() + "/" + appName + ".jar");
+            org.apache.hadoop.fs.Path srcJar = new org.apache.hadoop.fs.Path(ROOT_DIRECTORY + uploadTime.getMillis() + "/" + appName + ".jar");
             org.apache.hadoop.fs.Path localJar = new org.apache.hadoop.fs.Path(jar.toAbsolutePath().toString());
             if (!fs.exists(srcJar)) {
                 return false;
